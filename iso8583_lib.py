@@ -24,6 +24,7 @@ FIELD_DICTIONARY = {
     41: ("Card acceptor terminal identification", "FIXED", 8),
     42: ("Card acceptor identification code", "FIXED", 15),
     49: ("Currency code", "FIXED", 3),
+    52: ("PIN block (demo: four ASCII digits)", "FIXED", 4),
     62: ("Private use", "LLLVAR", 999),
 }
 

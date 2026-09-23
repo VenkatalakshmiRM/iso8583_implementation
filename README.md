@@ -6,7 +6,7 @@ This is a from-scratch, teaching-oriented implementation of an ASCII ISO 8583-st
 
 Each unframed message is `MTI (4 ASCII bytes) + primary bitmap (8 binary bytes) + data elements`. The TCP layer prepends a separate two-byte big-endian length. The bitmap has one bit per DE: field 2 is bit 2, field 64 is bit 64. Fields occur in numerical order. `LLVAR` fields have a two-ASCII-digit length prefix and `LLLVAR` fields have a three-digit prefix.
 
-The field dictionary supports DE2, 3, 4, 7, 11, 12, 13, 32, 37, 39, 41, 42, 49, and 62. Fixed fields have their specified width; DE2 and DE32 are LLVAR; DE62 is LLLVAR.
+The field dictionary supports DE2, 3, 4, 7, 11, 12, 13, 32, 37, 39, 41, 42, 49, 52, and 62. Fixed fields have their specified width; DE2 and DE32 are LLVAR; DE62 is LLLVAR. DE52 is four ASCII digits for this PIN demo (not a production encrypted PIN block).
 
 Example first bytes from a `0200` purchase (the exact bitmap and values vary with timestamp/STAN):
 
@@ -33,19 +33,19 @@ Use the real `client.log` dump for an exact report figure. The `hexdump()` helpe
 From this folder, first validate the source:
 
 ```powershell
-python3 -m py_compile iso8583_lib.py server.py client.py
+python -m py_compile iso8583_lib.py server.py client.py view_transactions.py
 ```
 
 In terminal 1:
 
 ```powershell
-python3 server.py
+python server.py
 ```
 
 In terminal 2:
 
 ```powershell
-python3 client.py
+python client.py
 ```
 
 Then watch logs live in separate terminals:
@@ -55,7 +55,59 @@ Get-Content .\server.log -Wait
 Get-Content .\client.log -Wait
 ```
 
-The client exits successfully only if both replies contain `DE39=00`. Stop the server with `Ctrl+C`.
+The server handles clients on separate threads and stores request decisions in `transactions.db`. The test PAN `4242424242424242` has demo PIN `1234`.
+
+## Feature test commands (PowerShell)
+
+Run these from this folder. Keep the server running in a separate terminal unless the command says otherwise.
+
+Correct PIN and echo:
+
+```powershell
+python .\server.py
+python .\client.py --pin correct
+```
+
+Wrong PIN (expected DE39=55):
+
+```powershell
+python .\client.py --pin wrong
+```
+
+Force a purchase response timeout and observe automatic 0400/0420 reversal: set the server's purchase response delay to 6 seconds. The client times out at 5 seconds, sends a reversal, and gets the immediate 0420 response. The server applies the configured delay to 0200 purchases only.
+
+```powershell
+$env:RESPONSE_DELAY_SECONDS = '6'
+python .\server.py
+```
+
+In another terminal:
+
+```powershell
+python .\client.py --no-echo
+```
+
+Stop the delayed server with Ctrl+C, then clear its delay before the next run:
+
+```powershell
+Remove-Item Env:\RESPONSE_DELAY_SECONDS -ErrorAction SilentlyContinue
+```
+
+Run 2–3 clients simultaneously (each gets an independent random STAN):
+
+```powershell
+1..3 | ForEach-Object { Start-Process python -ArgumentList '.\client.py','--pin','correct' }
+```
+
+View recorded transactions:
+
+```powershell
+python .\view_transactions.py
+```
+
+The server also accepts `SIMULATE_TIMEOUT=1` to drop all replies. Remove the environment variable after testing to restore normal replies.
+
+The client exits successfully only if purchase and echo replies contain `DE39=00`; wrong PIN is an expected decline. Stop the server with `Ctrl+C`.
 
 ## Networking report evidence
 
