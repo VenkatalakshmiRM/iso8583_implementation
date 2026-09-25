@@ -110,9 +110,18 @@ def handle_client(conn, address):
 
 def main():
     configure_logging()
+    # Show exactly which codec module and DE52 definition this process loaded.
+    logging.info("Codec module: %s; DE52 definition: %r",
+                 unpack_message.__code__.co_filename,
+                 unpack_message.__globals__["FIELD_DICTIONARY"].get(52))
     init_database()
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server:
-        server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        # On Windows, exclusive binding prevents two server copies from sharing
+        # port 8583 and receiving connections unpredictably.
+        if os.name == "nt" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:
+            server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         server.bind((HOST, PORT))
         server.listen()
         logging.info("ISO 8583 issuer/switch listening on %s:%d", HOST, PORT)
